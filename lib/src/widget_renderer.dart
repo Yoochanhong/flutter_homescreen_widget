@@ -39,15 +39,7 @@ class WidgetRenderer {
     required Size size,
     double pixelRatio = 3.0,
   }) async {
-    final overlay = _navigatorKey?.currentState?.overlay;
-    if (overlay == null) {
-      throw StateError(
-        'FlutterHomescreenWidget.init() must be called with a valid NavigatorKey '
-        'before rendering widgets.',
-      );
-    }
-
-    final completer = Completer<Uint8List>();
+    final overlay = await _waitForOverlay();
     final key = GlobalKey();
 
     final entry = OverlayEntry(
@@ -77,23 +69,57 @@ class WidgetRenderer {
       ),
     );
 
-    overlay.insert(entry);
+    try {
+      overlay.insert(entry);
+      await _waitForNextFrame();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final renderObject = key.currentContext?.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary) {
+        throw StateError('The widget could not be rendered for capture.');
+      }
+
+      final image = await renderObject.toImage(pixelRatio: pixelRatio);
       try {
-        final boundary =
-            key.currentContext!.findRenderObject() as RenderRepaintBoundary;
-        final image = await boundary.toImage(pixelRatio: pixelRatio);
-        final byteData =
-            await image.toByteData(format: ui.ImageByteFormat.png);
-        completer.complete(byteData!.buffer.asUint8List());
-      } catch (e, st) {
-        completer.completeError(e, st);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) {
+          throw StateError('The rendered widget did not produce image data.');
+        }
+        return byteData.buffer.asUint8List();
       } finally {
+        image.dispose();
+      }
+    } finally {
+      if (entry.mounted) {
         entry.remove();
       }
-    });
+    }
+  }
 
+  static Future<OverlayState> _waitForOverlay() async {
+    final navigatorKey = _navigatorKey;
+    if (navigatorKey == null) {
+      throw StateError(
+        'FlutterHomescreenWidget.init() must be called with a valid NavigatorKey '
+        'before rendering widgets.',
+      );
+    }
+
+    while (true) {
+      final overlay = navigatorKey.currentState?.overlay;
+      if (overlay != null) {
+        return overlay;
+      }
+
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  static Future<void> _waitForNextFrame() {
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      completer.complete();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
     return completer.future;
   }
 }
