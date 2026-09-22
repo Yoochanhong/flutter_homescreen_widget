@@ -26,6 +26,27 @@ void main() {
     expect(bytes, isNotEmpty);
   });
 
+  testWidgets('throws when overlay is unavailable after one frame', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    WidgetRenderer.init(navigatorKey);
+
+    final renderFuture = WidgetRenderer.render(
+      widget: const SizedBox(),
+      size: const Size(20, 20),
+      pixelRatio: 1,
+    );
+    final result = renderFuture.then<Object?>(
+      (_) => null,
+      onError: (Object error, StackTrace stackTrace) => error,
+    );
+
+    await tester.pump();
+
+    expect(await result, isA<StateError>());
+  });
+
   testWidgets('removes the overlay entry after capture', (tester) async {
     final navigatorKey = GlobalKey<NavigatorState>();
     WidgetRenderer.init(navigatorKey);
