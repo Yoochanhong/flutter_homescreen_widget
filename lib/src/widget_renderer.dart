@@ -104,14 +104,21 @@ class WidgetRenderer {
       );
     }
 
-    while (true) {
-      final overlay = navigatorKey.currentState?.overlay;
-      if (overlay != null) {
-        return overlay;
-      }
-
-      await WidgetsBinding.instance.endOfFrame;
+    final currentOverlay = navigatorKey.currentState?.overlay;
+    if (currentOverlay != null) {
+      return currentOverlay;
     }
+
+    await _waitForNextFrame();
+
+    final overlay = navigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      throw StateError(
+        'The NavigatorKey is not attached to an app with an Overlay.',
+      );
+    }
+
+    return overlay;
   }
 
   static Future<void> _waitForNextFrame() {
