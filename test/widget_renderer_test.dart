@@ -45,6 +45,19 @@ void main() {
     await tester.pump();
 
     expect(disposed, isTrue);
+
+    var renderedAgain = false;
+    final secondRender = WidgetRenderer.render(
+      widget: _DisposeTracker(onDispose: () => renderedAgain = true),
+      size: const Size(20, 20),
+      pixelRatio: 1,
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(await tester.runAsync(() => secondRender), isNotEmpty);
+    await tester.pump();
+
+    expect(renderedAgain, isTrue);
   });
 }
 
