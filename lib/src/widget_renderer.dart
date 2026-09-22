@@ -69,8 +69,10 @@ class WidgetRenderer {
       ),
     );
 
+    var inserted = false;
     try {
       overlay.insert(entry);
+      inserted = true;
       await _waitForNextFrame();
 
       final renderObject = key.currentContext?.findRenderObject();
@@ -89,8 +91,12 @@ class WidgetRenderer {
         image.dispose();
       }
     } finally {
-      if (entry.mounted) {
-        entry.remove();
+      if (inserted) {
+        try {
+          entry.remove();
+        } finally {
+          entry.dispose();
+        }
       }
     }
   }
