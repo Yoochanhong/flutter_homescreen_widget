@@ -81,23 +81,36 @@ class WidgetRenderer {
       }
 
       final image = await renderObject.toImage(pixelRatio: pixelRatio);
-      try {
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (byteData == null) {
-          throw StateError('The rendered widget did not produce image data.');
-        }
-        return byteData.buffer.asUint8List();
-      } finally {
-        image.dispose();
-      }
+      return _encodeImage(image);
     } finally {
-      if (inserted) {
-        try {
-          entry.remove();
-        } finally {
-          entry.dispose();
-        }
+      _disposeOverlayEntry(entry, inserted: inserted);
+    }
+  }
+
+  static Future<Uint8List> _encodeImage(ui.Image image) async {
+    try {
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw StateError('The rendered widget did not produce image data.');
       }
+      return byteData.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
+  }
+
+  static void _disposeOverlayEntry(
+    OverlayEntry entry, {
+    required bool inserted,
+  }) {
+    if (!inserted) {
+      return;
+    }
+
+    try {
+      entry.remove();
+    } finally {
+      entry.dispose();
     }
   }
 
