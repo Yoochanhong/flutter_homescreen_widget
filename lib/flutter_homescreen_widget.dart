@@ -41,15 +41,17 @@ export 'src/flutter_homescreen_widget_host.dart';
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///
-/// All methods are static. Call [init] once at app startup, then use
-/// [update], [reload], and [onAction] anywhere in your app.
+/// All methods are static. Install [FlutterHomescreenWidgetHost] once above
+/// the application, then use [update], [reload], and [onAction] anywhere in
+/// your app.
 class FlutterHomescreenWidget {
   FlutterHomescreenWidget._();
 
-  /// Registers the app's [NavigatorState] key.
+  /// Registers the app's [NavigatorState] key for legacy applications.
   ///
-  /// Must be called **before** [runApp] so the widget renderer can access
-  /// the [Overlay] for off-screen rendering.
+  /// Prefer installing [FlutterHomescreenWidgetHost] above the application.
+  /// That API owns a separate rendering surface and does not depend on the
+  /// application's Navigator lifecycle.
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -59,6 +61,7 @@ class FlutterHomescreenWidget {
   ///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
   /// }
   /// ```
+  @Deprecated('Use FlutterHomescreenWidgetHost instead.')
   static void init(GlobalKey<NavigatorState> navigatorKey) {
     WidgetRenderer.init(navigatorKey);
   }

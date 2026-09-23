@@ -49,6 +49,10 @@ class MyApp extends StatelessWidget {
 }
 ```
 
+Existing applications may keep `FlutterHomescreenWidget.init(navigatorKey)`
+temporarily, but it is deprecated. Remove the key from `MaterialApp` after
+migrating to `FlutterHomescreenWidgetHost`.
+
 ### iOS setup
 
 > Full guide: [doc/ios-setup.md](doc/ios-setup.md)
