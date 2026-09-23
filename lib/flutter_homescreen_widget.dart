@@ -4,11 +4,12 @@
 /// ## Quick start
 ///
 /// ```dart
-/// final _navKey = GlobalKey<NavigatorState>();
-///
 /// void main() {
-///   FlutterHomescreenWidget.init(_navKey);
-///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
+///   runApp(
+///     const FlutterHomescreenWidgetHost(
+///       child: MyApp(),
+///     ),
+///   );
 /// }
 /// ```
 ///
@@ -32,9 +33,11 @@ import 'package:flutter/widgets.dart';
 
 import 'flutter_homescreen_widget_platform_interface.dart';
 import 'src/widget_action.dart';
+import 'src/flutter_homescreen_widget_host.dart';
 import 'src/widget_renderer.dart';
 
 export 'src/widget_action.dart';
+export 'src/flutter_homescreen_widget_host.dart';
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///

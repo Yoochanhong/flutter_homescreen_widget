@@ -1,9 +1,51 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_homescreen_widget/flutter_homescreen_widget.dart';
 import 'package:flutter_homescreen_widget/src/widget_renderer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('waits for the host when rendering starts during mount', (
+    tester,
+  ) async {
+    final renderKey = GlobalKey<_RenderOnMountState>();
+    await tester.pumpWidget(
+      FlutterHomescreenWidgetHost(child: _RenderOnMount(key: renderKey)),
+    );
+    await tester.pump();
+
+    final bytes = await tester.runAsync(
+      () => renderKey.currentState!.renderFuture,
+    );
+
+    expect(bytes, isNotEmpty);
+  });
+
+  testWidgets(
+    'renders through the package-owned host without a navigator key',
+    (tester) async {
+      await tester.pumpWidget(
+        const FlutterHomescreenWidgetHost(
+          child: MaterialApp(home: SizedBox.shrink()),
+        ),
+      );
+
+      final renderFuture = WidgetRenderer.render(
+        widget: const ColoredBox(color: Colors.blue),
+        size: const Size(20, 20),
+        pixelRatio: 1,
+      );
+      await tester.pump();
+
+      final bytes = await tester.runAsync(() => renderFuture);
+      await tester.pump();
+
+      expect(bytes, isNotEmpty);
+    },
+  );
 
   testWidgets('waits for the overlay and first frame before rendering', (
     tester,
@@ -89,6 +131,30 @@ class _DisposeTracker extends StatefulWidget {
 
   @override
   State<_DisposeTracker> createState() => _DisposeTrackerState();
+}
+
+class _RenderOnMount extends StatefulWidget {
+  const _RenderOnMount({super.key});
+
+  @override
+  State<_RenderOnMount> createState() => _RenderOnMountState();
+}
+
+class _RenderOnMountState extends State<_RenderOnMount> {
+  late final Future<Uint8List> renderFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    renderFuture = WidgetRenderer.render(
+      widget: const ColoredBox(color: Colors.green),
+      size: const Size(20, 20),
+      pixelRatio: 1,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _DisposeTrackerState extends State<_DisposeTracker> {

@@ -28,21 +28,21 @@ dependencies:
 
 ### Initialize
 
-Register a `NavigatorKey` before `runApp` so the renderer can access the overlay:
+Install the package-owned rendering host once above your application:
 
 ```dart
-final _navKey = GlobalKey<NavigatorState>();
-
 void main() {
- FlutterHomescreenWidget.init(_navKey);
- runApp(MyApp());
+ runApp(
+   const FlutterHomescreenWidgetHost(
+     child: MyApp(),
+   ),
+ );
 }
 
 class MyApp extends StatelessWidget {
  @override
  Widget build(BuildContext context) {
  return MaterialApp(
- navigatorKey: _navKey,
  home: const HomePage(),
  );
  }
@@ -122,7 +122,7 @@ await FlutterHomescreenWidget.reload(widgetName: 'CounterWidget');
 
 ```
 Flutter widget
- │ rendered to PNG via RepaintBoundary (live Overlay)
+ │ rendered to PNG via RepaintBoundary (package-owned Overlay)
  ▼
 App Group (iOS) / internal storage (Android)
  │ shared between app process and widget process

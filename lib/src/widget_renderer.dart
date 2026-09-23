@@ -7,15 +7,61 @@ import 'package:flutter/widgets.dart';
 
 /// Renders a Flutter widget tree to a PNG [Uint8List].
 ///
-/// Inserts the widget into the live overlay (off-screen) so that fonts,
-/// images, and platform views are all available during capture.
+/// The preferred rendering surface is registered by
+/// [FlutterHomescreenWidgetHost]. A Navigator overlay is retained only as a
+/// backwards-compatible fallback for callers using the deprecated [init].
 class WidgetRenderer {
   WidgetRenderer._();
 
   static GlobalKey<NavigatorState>? _navigatorKey;
+  static GlobalKey<OverlayState>? _hostOverlayKey;
+  static Completer<OverlayState>? _hostReady;
 
-  /// Registers the app's [NavigatorState] key so the renderer can access
-  /// the [Overlay]. Must be called once before [render].
+  static const _hostReadyTimeout = Duration(seconds: 5);
+
+  /// Registers the package-owned rendering host.
+  static void registerHost(GlobalKey<OverlayState> overlayKey) {
+    _hostOverlayKey = overlayKey;
+    _hostReady = Completer<OverlayState>();
+  }
+
+  /// Marks the package-owned rendering host ready after it has mounted.
+  static void markHostReady(GlobalKey<OverlayState> overlayKey) {
+    if (_hostOverlayKey != overlayKey) {
+      return;
+    }
+
+    final overlay = overlayKey.currentState;
+    if (overlay != null && !(_hostReady?.isCompleted ?? true)) {
+      _hostReady!.complete(overlay);
+    }
+  }
+
+  /// Fails requests still waiting when the host is removed from the tree.
+  static void unregisterHost(GlobalKey<OverlayState> overlayKey) {
+    if (_hostOverlayKey != overlayKey) {
+      return;
+    }
+
+    final ready = _hostReady;
+    _hostOverlayKey = null;
+    _hostReady = null;
+    if (ready != null && !ready.isCompleted) {
+      ready.future.then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stackTrace) {},
+      );
+      ready.completeError(
+        StateError(
+          'FlutterHomescreenWidgetHost was removed before rendering finished.',
+        ),
+      );
+    }
+  }
+
+  /// Registers the app's [NavigatorState] key for legacy applications.
+  ///
+  /// Prefer installing [FlutterHomescreenWidgetHost].
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -33,7 +79,7 @@ class WidgetRenderer {
   ///
   /// [pixelRatio] controls the output resolution (default 3.0 for @3x).
   ///
-  /// Throws [StateError] if [init] has not been called first.
+  /// Throws [StateError] if no rendering host is installed or initialized.
   static Future<Uint8List> render({
     required Widget widget,
     required Size size,
@@ -115,6 +161,30 @@ class WidgetRenderer {
   }
 
   static Future<OverlayState> _waitForOverlay() async {
+    final hostOverlay = _hostOverlayKey?.currentState;
+    if (hostOverlay != null) {
+      return hostOverlay;
+    }
+
+    if (_hostOverlayKey != null) {
+      final ready = _hostReady;
+      if (ready == null) {
+        throw StateError(
+          'FlutterHomescreenWidgetHost could not initialize its rendering '
+          'surface.',
+        );
+      }
+
+      try {
+        return await ready.future.timeout(_hostReadyTimeout);
+      } on TimeoutException {
+        throw StateError(
+          'FlutterHomescreenWidgetHost did not become ready. Install it '
+          'above the application before calling update().',
+        );
+      }
+    }
+
     final navigatorKey = _navigatorKey;
     if (navigatorKey == null) {
       throw StateError(
