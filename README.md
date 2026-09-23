@@ -28,30 +28,26 @@ dependencies:
 
 ### Initialize
 
-Install the package-owned rendering host once above your application:
+Install the package-owned rendering surface through `MaterialApp.builder`:
 
 ```dart
-void main() {
- runApp(
-   const FlutterHomescreenWidgetHost(
-     child: MyApp(),
-   ),
- );
-}
-
 class MyApp extends StatelessWidget {
  @override
  Widget build(BuildContext context) {
  return MaterialApp(
+ builder: FlutterHomescreenWidget.builder,
  home: const HomePage(),
  );
  }
 }
 ```
 
-Existing applications may keep `FlutterHomescreenWidget.init(navigatorKey)`
-temporarily, but it is deprecated. Remove the key from `MaterialApp` after
-migrating to `FlutterHomescreenWidgetHost`.
+If the application already has a `builder`, compose it with
+`FlutterHomescreenWidget.builder` so the package surface remains inside the
+application context.
+
+Existing applications may temporarily keep `FlutterHomescreenWidgetHost` or
+`FlutterHomescreenWidget.init(navigatorKey)`, but both are deprecated.
 
 ### iOS setup
 

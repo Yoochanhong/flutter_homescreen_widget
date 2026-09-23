@@ -4,13 +4,10 @@
 /// ## Quick start
 ///
 /// ```dart
-/// void main() {
-///   runApp(
-///     const FlutterHomescreenWidgetHost(
-///       child: MyApp(),
-///     ),
-///   );
-/// }
+/// MaterialApp(
+///   builder: FlutterHomescreenWidget.builder,
+///   home: const HomePage(),
+/// );
 /// ```
 ///
 /// Then update a widget:
@@ -32,8 +29,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import 'flutter_homescreen_widget_platform_interface.dart';
+import 'src/flutter_homescreen_widget_surface.dart';
 import 'src/widget_action.dart';
-import 'src/flutter_homescreen_widget_host.dart';
 import 'src/widget_renderer.dart';
 
 export 'src/widget_action.dart';
@@ -41,17 +38,28 @@ export 'src/flutter_homescreen_widget_host.dart';
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///
-/// All methods are static. Install [FlutterHomescreenWidgetHost] once above
-/// the application, then use [update], [reload], and [onAction] anywhere in
-/// your app.
+/// All methods are static. Install [builder] in the application's app widget,
+/// then use [update], [reload], and [onAction] anywhere in your app.
 class FlutterHomescreenWidget {
   FlutterHomescreenWidget._();
 
+  /// Installs the package-owned rendering surface inside an app widget.
+  ///
+  /// ```dart
+  /// MaterialApp(
+  ///   builder: FlutterHomescreenWidget.builder,
+  ///   home: const HomePage(),
+  /// );
+  /// ```
+  static Widget builder(BuildContext context, Widget? child) {
+    return FlutterHomescreenWidgetSurface(
+      child: child ?? const SizedBox.shrink(),
+    );
+  }
+
   /// Registers the app's [NavigatorState] key for legacy applications.
   ///
-  /// Prefer installing [FlutterHomescreenWidgetHost] above the application.
-  /// That API owns a separate rendering surface and does not depend on the
-  /// application's Navigator lifecycle.
+  /// Prefer installing [builder] in the application widget.
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -61,7 +69,7 @@ class FlutterHomescreenWidget {
   ///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
   /// }
   /// ```
-  @Deprecated('Use FlutterHomescreenWidgetHost instead.')
+  @Deprecated('Use FlutterHomescreenWidget.builder instead.')
   static void init(GlobalKey<NavigatorState> navigatorKey) {
     WidgetRenderer.init(navigatorKey);
   }

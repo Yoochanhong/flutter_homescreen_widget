@@ -8,8 +8,8 @@ import 'package:flutter/widgets.dart';
 /// Renders a Flutter widget tree to a PNG [Uint8List].
 ///
 /// The preferred rendering surface is registered by
-/// [FlutterHomescreenWidgetHost]. A Navigator overlay is retained only as a
-/// backwards-compatible fallback for callers using the deprecated [init].
+/// [FlutterHomescreenWidget.builder]. A Navigator overlay is retained only as
+/// a backwards-compatible fallback for callers using deprecated [init].
 class WidgetRenderer {
   WidgetRenderer._();
 
@@ -179,8 +179,9 @@ class WidgetRenderer {
         return await ready.future.timeout(_hostReadyTimeout);
       } on TimeoutException {
         throw StateError(
-          'FlutterHomescreenWidgetHost did not become ready. Install it '
-          'above the application before calling update().',
+          'The FlutterHomescreenWidget rendering surface did not become '
+          'ready. Install FlutterHomescreenWidget.builder in the application '
+          'before calling update().',
         );
       }
     }

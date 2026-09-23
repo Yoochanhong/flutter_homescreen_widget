@@ -13,7 +13,10 @@ void main() {
   ) async {
     final renderKey = GlobalKey<_RenderOnMountState>();
     await tester.pumpWidget(
-      FlutterHomescreenWidgetHost(child: _RenderOnMount(key: renderKey)),
+      MaterialApp(
+        builder: FlutterHomescreenWidget.builder,
+        home: _RenderOnMount(key: renderKey),
+      ),
     );
     await tester.pump();
 
@@ -25,11 +28,12 @@ void main() {
   });
 
   testWidgets(
-    'renders through the package-owned host without a navigator key',
+    'renders through the package-owned surface without a navigator key',
     (tester) async {
       await tester.pumpWidget(
-        const FlutterHomescreenWidgetHost(
-          child: MaterialApp(home: SizedBox.shrink()),
+        const MaterialApp(
+          builder: FlutterHomescreenWidget.builder,
+          home: SizedBox.shrink(),
         ),
       );
 
