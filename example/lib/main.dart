@@ -36,12 +36,10 @@ class _ClockPageState extends State<ClockPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateWidgets();
-    });
+    unawaited(_updateWidgets());
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       setState(() => _now = DateTime.now());
-      _updateWidgets();
+      unawaited(_updateWidgets());
     });
   }
 
