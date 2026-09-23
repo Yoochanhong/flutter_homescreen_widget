@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_homescreen_widget/flutter_homescreen_widget.dart';
 
 void main() {
-  runApp(const FlutterHomescreenWidgetHost(child: MyApp()));
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -13,6 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      builder: FlutterHomescreenWidget.builder,
       title: 'flutter_homescreen_widget example',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
