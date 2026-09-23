@@ -14,38 +14,42 @@ class WidgetRenderer {
   WidgetRenderer._();
 
   static GlobalKey<NavigatorState>? _navigatorKey;
-  static GlobalKey<OverlayState>? _hostOverlayKey;
-  static Completer<OverlayState>? _hostReady;
+  static GlobalKey<OverlayState>? _surfaceOverlayKey;
+  static Completer<OverlayState>? _surfaceReady;
 
-  static const _hostReadyTimeout = Duration(seconds: 5);
+  static const _surfaceReadyTimeout = Duration(seconds: 5);
 
-  /// Registers the package-owned rendering host.
-  static void registerHost(GlobalKey<OverlayState> overlayKey) {
-    _hostOverlayKey = overlayKey;
-    _hostReady = Completer<OverlayState>();
+  static Widget buildSurface(Widget child) {
+    return _RenderingSurface(child: child);
   }
 
-  /// Marks the package-owned rendering host ready after it has mounted.
-  static void markHostReady(GlobalKey<OverlayState> overlayKey) {
-    if (_hostOverlayKey != overlayKey) {
+  /// Registers the package-owned rendering surface.
+  static void registerSurface(GlobalKey<OverlayState> overlayKey) {
+    _surfaceOverlayKey = overlayKey;
+    _surfaceReady = Completer<OverlayState>();
+  }
+
+  /// Marks the package-owned rendering surface ready after it has mounted.
+  static void markSurfaceReady(GlobalKey<OverlayState> overlayKey) {
+    if (_surfaceOverlayKey != overlayKey) {
       return;
     }
 
     final overlay = overlayKey.currentState;
-    if (overlay != null && !(_hostReady?.isCompleted ?? true)) {
-      _hostReady!.complete(overlay);
+    if (overlay != null && !(_surfaceReady?.isCompleted ?? true)) {
+      _surfaceReady!.complete(overlay);
     }
   }
 
-  /// Fails requests still waiting when the host is removed from the tree.
-  static void unregisterHost(GlobalKey<OverlayState> overlayKey) {
-    if (_hostOverlayKey != overlayKey) {
+  /// Fails requests still waiting when the rendering surface is removed.
+  static void unregisterSurface(GlobalKey<OverlayState> overlayKey) {
+    if (_surfaceOverlayKey != overlayKey) {
       return;
     }
 
-    final ready = _hostReady;
-    _hostOverlayKey = null;
-    _hostReady = null;
+    final ready = _surfaceReady;
+    _surfaceOverlayKey = null;
+    _surfaceReady = null;
     if (ready != null && !ready.isCompleted) {
       ready.future.then<void>(
         (_) {},
@@ -53,7 +57,8 @@ class WidgetRenderer {
       );
       ready.completeError(
         StateError(
-          'FlutterHomescreenWidgetHost was removed before rendering finished.',
+          'The FlutterHomescreenWidget rendering surface was removed before '
+          'rendering finished.',
         ),
       );
     }
@@ -61,7 +66,7 @@ class WidgetRenderer {
 
   /// Registers the app's [NavigatorState] key for legacy applications.
   ///
-  /// Prefer installing [FlutterHomescreenWidgetHost].
+  /// Prefer installing [FlutterHomescreenWidget.builder].
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -79,7 +84,7 @@ class WidgetRenderer {
   ///
   /// [pixelRatio] controls the output resolution (default 3.0 for @3x).
   ///
-  /// Throws [StateError] if no rendering host is installed or initialized.
+  /// Throws [StateError] if no rendering surface is installed or initialized.
   static Future<Uint8List> render({
     required Widget widget,
     required Size size,
@@ -161,22 +166,21 @@ class WidgetRenderer {
   }
 
   static Future<OverlayState> _waitForOverlay() async {
-    final hostOverlay = _hostOverlayKey?.currentState;
-    if (hostOverlay != null) {
-      return hostOverlay;
+    final surfaceOverlay = _surfaceOverlayKey?.currentState;
+    if (surfaceOverlay != null) {
+      return surfaceOverlay;
     }
 
-    if (_hostOverlayKey != null) {
-      final ready = _hostReady;
+    if (_surfaceOverlayKey != null) {
+      final ready = _surfaceReady;
       if (ready == null) {
         throw StateError(
-          'FlutterHomescreenWidgetHost could not initialize its rendering '
-          'surface.',
+          'The FlutterHomescreenWidget rendering surface could not initialize.',
         );
       }
 
       try {
-        return await ready.future.timeout(_hostReadyTimeout);
+        return await ready.future.timeout(_surfaceReadyTimeout);
       } on TimeoutException {
         throw StateError(
           'The FlutterHomescreenWidget rendering surface did not become '
@@ -218,5 +222,50 @@ class WidgetRenderer {
     });
     WidgetsBinding.instance.ensureVisualUpdate();
     return completer.future;
+  }
+}
+
+class _RenderingSurface extends StatefulWidget {
+  const _RenderingSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_RenderingSurface> createState() => _RenderingSurfaceState();
+}
+
+class _RenderingSurfaceState extends State<_RenderingSurface> {
+  final _overlayKey = GlobalKey<OverlayState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetRenderer.registerSurface(_overlayKey);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        WidgetRenderer.markSurfaceReady(_overlayKey);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetRenderer.unregisterSurface(_overlayKey);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.topLeft,
+      children: [
+        widget.child,
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: IgnorePointer(child: Overlay(key: _overlayKey)),
+        ),
+      ],
+    );
   }
 }

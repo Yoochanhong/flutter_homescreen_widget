@@ -46,8 +46,8 @@ If the application already has a `builder`, compose it with
 `FlutterHomescreenWidget.builder` so the package surface remains inside the
 application context.
 
-Existing applications may temporarily keep `FlutterHomescreenWidgetHost` or
-`FlutterHomescreenWidget.init(navigatorKey)`, but both are deprecated.
+Existing applications may temporarily keep
+`FlutterHomescreenWidget.init(navigatorKey)`, but it is deprecated.
 
 ### iOS setup
 

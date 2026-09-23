@@ -29,12 +29,10 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import 'flutter_homescreen_widget_platform_interface.dart';
-import 'src/flutter_homescreen_widget_surface.dart';
 import 'src/widget_action.dart';
 import 'src/widget_renderer.dart';
 
 export 'src/widget_action.dart';
-export 'src/flutter_homescreen_widget_host.dart';
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///
@@ -52,9 +50,7 @@ class FlutterHomescreenWidget {
   /// );
   /// ```
   static Widget builder(BuildContext context, Widget? child) {
-    return FlutterHomescreenWidgetSurface(
-      child: child ?? const SizedBox.shrink(),
-    );
+    return WidgetRenderer.buildSurface(child ?? const SizedBox.shrink());
   }
 
   /// Registers the app's [NavigatorState] key for legacy applications.

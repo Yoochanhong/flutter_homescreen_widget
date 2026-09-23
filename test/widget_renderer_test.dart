@@ -8,7 +8,7 @@ import 'package:flutter_homescreen_widget/src/widget_renderer.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('waits for the host when rendering starts during mount', (
+  testWidgets('waits for the surface when rendering starts during mount', (
     tester,
   ) async {
     final renderKey = GlobalKey<_RenderOnMountState>();
