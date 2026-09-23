@@ -3,11 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_homescreen_widget/flutter_homescreen_widget.dart';
 
-final _navigatorKey = GlobalKey<NavigatorState>();
-
 void main() {
-  FlutterHomescreenWidget.init(_navigatorKey);
-  runApp(const MyApp());
+  runApp(const FlutterHomescreenWidgetHost(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -16,7 +13,6 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navigatorKey,
       title: 'flutter_homescreen_widget example',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
