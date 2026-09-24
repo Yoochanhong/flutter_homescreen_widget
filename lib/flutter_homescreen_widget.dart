@@ -109,8 +109,6 @@ class FlutterHomescreenWidget {
     List<WidgetAction> actions = const [],
     double pixelRatio = 3.0,
   }) {
-    // Fail before entering the queue so a missing host never waits behind an
-    // unrelated update.
     WidgetRenderer.ensureHostMounted();
 
     final result = _updateQueue.then<void>(

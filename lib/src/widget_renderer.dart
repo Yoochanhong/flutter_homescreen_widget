@@ -222,8 +222,6 @@ class _FlutterHomescreenWidgetHostState
       (_) => _renderOne(widget: widget, size: size, pixelRatio: pixelRatio),
     );
 
-    // Keep the queue usable after a failed render while preserving the error
-    // on the Future returned to the caller.
     _renderQueue = result.then<void>(
       (_) {},
       onError: (Object error, StackTrace stackTrace) {},
