@@ -5,7 +5,9 @@
 ///
 /// ```dart
 /// MaterialApp(
-///   builder: FlutterHomescreenWidget.builder,
+///   builder: (context, child) {
+///     return FlutterHomescreenWidgetHost(child: child!);
+///   },
 ///   home: const HomePage(),
 /// );
 /// ```
@@ -33,29 +35,35 @@ import 'src/widget_action.dart';
 import 'src/widget_renderer.dart';
 
 export 'src/widget_action.dart';
+export 'src/widget_renderer.dart' show FlutterHomescreenWidgetHost;
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///
-/// All methods are static. Install [builder] in the application's app widget,
-/// then use [update], [reload], and [onAction] anywhere in your app.
+/// Install [builder] in the application's app widget, then use [update],
+/// [reload], and [onAction] anywhere in your app.
 class FlutterHomescreenWidget {
   FlutterHomescreenWidget._();
+
+  static Future<void> _updateQueue = Future<void>.value();
 
   /// Installs the package-owned rendering surface inside an app widget.
   ///
   /// ```dart
   /// MaterialApp(
-  ///   builder: FlutterHomescreenWidget.builder,
+  ///   builder: (context, child) {
+  ///     return FlutterHomescreenWidgetHost(child: child!);
+  ///   },
   ///   home: const HomePage(),
   /// );
   /// ```
   static Widget builder(BuildContext context, Widget? child) {
-    return WidgetRenderer.buildSurface(child ?? const SizedBox.shrink());
+    return WidgetRenderer.buildHost(child ?? const SizedBox.shrink());
   }
 
-  /// Registers the app's [NavigatorState] key for legacy applications.
+  /// Retains source compatibility for legacy applications during migration.
   ///
-  /// Prefer installing [builder] in the application widget.
+  /// This method no longer installs a rendering surface. Install [builder]
+  /// (or [FlutterHomescreenWidgetHost]) before calling [update].
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -100,12 +108,40 @@ class FlutterHomescreenWidget {
     required Size size,
     List<WidgetAction> actions = const [],
     double pixelRatio = 3.0,
+  }) {
+    // Fail before entering the queue so a missing host never waits behind an
+    // unrelated update.
+    WidgetRenderer.ensureHostMounted();
+
+    final result = _updateQueue.then<void>(
+      (_) => _updateOne(
+        widgetName: widgetName,
+        content: content,
+        size: size,
+        actions: actions,
+        pixelRatio: pixelRatio,
+      ),
+    );
+    _updateQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    return result;
+  }
+
+  static Future<void> _updateOne({
+    required String widgetName,
+    required Widget content,
+    required Size size,
+    required List<WidgetAction> actions,
+    required double pixelRatio,
   }) async {
     final bytes = await WidgetRenderer.render(
       widget: content,
       size: size,
       pixelRatio: pixelRatio,
     );
+    WidgetRenderer.ensureHostMounted();
 
     await FlutterHomescreenWidgetPlatform.instance.updateWidget(
       widgetName: widgetName,

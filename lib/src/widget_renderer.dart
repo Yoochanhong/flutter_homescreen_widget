@@ -7,265 +7,266 @@ import 'package:flutter/widgets.dart';
 
 /// Renders a Flutter widget tree to a PNG [Uint8List].
 ///
-/// The preferred rendering surface is registered by
-/// [FlutterHomescreenWidget.builder]. A Navigator overlay is retained only as
-/// a backwards-compatible fallback for callers using deprecated [init].
+/// Rendering is available only while [FlutterHomescreenWidgetHost] is mounted.
+/// The host provides the app context used to copy inherited themes and view
+/// configuration into an independent offscreen render tree.
 class WidgetRenderer {
   WidgetRenderer._();
 
-  static GlobalKey<NavigatorState>? _navigatorKey;
-  static GlobalKey<OverlayState>? _surfaceOverlayKey;
-  static Completer<OverlayState>? _surfaceReady;
+  static _FlutterHomescreenWidgetHostState? _host;
 
-  static const _surfaceReadyTimeout = Duration(seconds: 5);
-
-  static Widget buildSurface(Widget child) {
-    return _RenderingSurface(child: child);
+  static Widget buildHost(Widget child) {
+    return FlutterHomescreenWidgetHost(child: child);
   }
 
-  /// Registers the package-owned rendering surface.
-  static void registerSurface(GlobalKey<OverlayState> overlayKey) {
-    _surfaceOverlayKey = overlayKey;
-    _surfaceReady = Completer<OverlayState>();
+  static void _attach(_FlutterHomescreenWidgetHostState host) {
+    _host = host;
   }
 
-  /// Marks the package-owned rendering surface ready after it has mounted.
-  static void markSurfaceReady(GlobalKey<OverlayState> overlayKey) {
-    if (_surfaceOverlayKey != overlayKey) {
-      return;
-    }
-
-    final overlay = overlayKey.currentState;
-    if (overlay != null && !(_surfaceReady?.isCompleted ?? true)) {
-      _surfaceReady!.complete(overlay);
+  static void _detach(_FlutterHomescreenWidgetHostState host) {
+    if (identical(_host, host)) {
+      _host = null;
     }
   }
 
-  /// Fails requests still waiting when the rendering surface is removed.
-  static void unregisterSurface(GlobalKey<OverlayState> overlayKey) {
-    if (_surfaceOverlayKey != overlayKey) {
-      return;
-    }
-
-    final ready = _surfaceReady;
-    _surfaceOverlayKey = null;
-    _surfaceReady = null;
-    if (ready != null && !ready.isCompleted) {
-      ready.future.then<void>(
-        (_) {},
-        onError: (Object error, StackTrace stackTrace) {},
-      );
-      ready.completeError(
-        StateError(
-          'The FlutterHomescreenWidget rendering surface was removed before '
-          'rendering finished.',
-        ),
-      );
-    }
-  }
-
-  /// Registers the app's [NavigatorState] key for legacy applications.
+  /// Keeps the old entry point source-compatible during migration.
   ///
-  /// Prefer installing [FlutterHomescreenWidget.builder].
-  ///
-  /// ```dart
-  /// final _navKey = GlobalKey<NavigatorState>();
-  ///
-  /// void main() {
-  ///   FlutterHomescreenWidget.init(_navKey);
-  ///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
-  /// }
-  /// ```
-  static void init(GlobalKey<NavigatorState> navigatorKey) {
-    _navigatorKey = navigatorKey;
-  }
+  /// The key is intentionally no longer used. Applications must install
+  /// [FlutterHomescreenWidgetHost] through [FlutterHomescreenWidget.builder]
+  /// (or directly in `MaterialApp.builder`) before calling [render].
+  static void init(GlobalKey<NavigatorState> navigatorKey) {}
 
   /// Renders [widget] at [size] logical pixels and returns a PNG byte array.
   ///
   /// [pixelRatio] controls the output resolution (default 3.0 for @3x).
-  ///
-  /// Throws [StateError] if no rendering surface is installed or initialized.
+  /// Throws [StateError] immediately when the host is not mounted.
   static Future<Uint8List> render({
     required Widget widget,
     required Size size,
     double pixelRatio = 3.0,
-  }) async {
-    final overlay = await _waitForOverlay();
-    final key = GlobalKey();
+  }) {
+    ensureHostMounted();
+    return _host!.render(widget: widget, size: size, pixelRatio: pixelRatio);
+  }
 
-    final entry = OverlayEntry(
-      builder: (_) => Positioned(
-        left: -size.width * 2,
-        top: 0,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: RepaintBoundary(
-            key: key,
-            child: MediaQuery(
-              data: const MediaQueryData(),
-              child: DefaultTextStyle(
-                style: const TextStyle(
-                  decoration: TextDecoration.none,
-                  color: Color(0xFFFFFFFF),
-                ),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: widget,
-                ),
-              ),
+  static void ensureHostMounted() {
+    final host = _host;
+    if (host == null || !host.mounted) {
+      throw _hostNotMountedError();
+    }
+  }
+
+  static StateError hostNotMountedError() => _hostNotMountedError();
+
+  static StateError _hostNotMountedError() {
+    return StateError(
+      'FlutterHomescreenWidgetHost is not mounted. '
+      'Register it in MaterialApp.builder before calling update().',
+    );
+  }
+
+  static Future<Uint8List> _renderOffscreen({
+    required BuildContext context,
+    required Widget widget,
+    required Size size,
+    required double pixelRatio,
+  }) async {
+    final logicalConstraints = BoxConstraints.tight(size);
+    final pipelineOwner = PipelineOwner();
+    final buildOwner = BuildOwner(focusManager: FocusManager());
+    final repaintBoundary = RenderRepaintBoundary();
+    final renderView = RenderView(
+      view: View.of(context),
+      configuration: ViewConfiguration(
+        logicalConstraints: logicalConstraints,
+        physicalConstraints: logicalConstraints * pixelRatio,
+        devicePixelRatio: pixelRatio,
+      ),
+      child: repaintBoundary,
+    );
+
+    pipelineOwner.rootNode = renderView;
+    renderView.prepareInitialFrame();
+
+    final buildErrors = <FlutterErrorDetails>[];
+
+    T collectBuildErrors<T>(T Function() callback) {
+      final previousOnError = FlutterError.onError;
+      FlutterError.onError = buildErrors.add;
+      try {
+        return callback();
+      } finally {
+        FlutterError.onError = previousOnError;
+      }
+    }
+
+    void throwFirstBuildError() {
+      if (buildErrors.isEmpty) {
+        return;
+      }
+
+      final error = buildErrors.first;
+      Error.throwWithStackTrace(
+        error.exception,
+        error.stack ?? StackTrace.current,
+      );
+    }
+
+    final content = InheritedTheme.captureAll(
+      context,
+      MediaQuery(
+        data: MediaQuery.maybeOf(context) ?? const MediaQueryData(),
+        child: Directionality(
+          textDirection: Directionality.maybeOf(context) ?? TextDirection.ltr,
+          child: DefaultTextStyle(
+            style: const TextStyle(
+              decoration: TextDecoration.none,
+              color: Color(0xFFFFFFFF),
             ),
+            child: widget,
           ),
         ),
       ),
     );
 
-    var inserted = false;
-    try {
-      overlay.insert(entry);
-      inserted = true;
-      await _waitForNextFrame();
-
-      final renderObject = key.currentContext?.findRenderObject();
-      if (renderObject is! RenderRepaintBoundary) {
-        throw StateError('The widget could not be rendered for capture.');
-      }
-
-      final image = await renderObject.toImage(pixelRatio: pixelRatio);
-      return _encodeImage(image);
-    } finally {
-      _disposeOverlayEntry(entry, inserted: inserted);
-    }
-  }
-
-  static Future<Uint8List> _encodeImage(ui.Image image) async {
-    try {
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        throw StateError('The rendered widget did not produce image data.');
-      }
-      return byteData.buffer.asUint8List();
-    } finally {
-      image.dispose();
-    }
-  }
-
-  static void _disposeOverlayEntry(
-    OverlayEntry entry, {
-    required bool inserted,
-  }) {
-    if (!inserted) {
-      return;
-    }
+    RenderObjectToWidgetElement<RenderBox>? rootElement;
 
     try {
-      entry.remove();
-    } finally {
-      entry.dispose();
-    }
-  }
+      rootElement = collectBuildErrors(
+        () => RenderObjectToWidgetAdapter<RenderBox>(
+          container: repaintBoundary,
+          child: content,
+        ).attachToRenderTree(buildOwner),
+      );
+      throwFirstBuildError();
+      buildOwner.finalizeTree();
 
-  static Future<OverlayState> _waitForOverlay() async {
-    final surfaceOverlay = _surfaceOverlayKey?.currentState;
-    if (surfaceOverlay != null) {
-      return surfaceOverlay;
-    }
+      collectBuildErrors(pipelineOwner.flushLayout);
+      throwFirstBuildError();
+      pipelineOwner
+        ..flushCompositingBits()
+        ..flushPaint();
 
-    if (_surfaceOverlayKey != null) {
-      final ready = _surfaceReady;
-      if (ready == null) {
-        throw StateError(
-          'The FlutterHomescreenWidget rendering surface could not initialize.',
-        );
-      }
-
+      final image = await repaintBoundary.toImage(pixelRatio: pixelRatio);
       try {
-        return await ready.future.timeout(_surfaceReadyTimeout);
-      } on TimeoutException {
-        throw StateError(
-          'The FlutterHomescreenWidget rendering surface did not become '
-          'ready. Install FlutterHomescreenWidget.builder in the application '
-          'before calling update().',
-        );
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) {
+          throw StateError('The rendered widget did not produce image data.');
+        }
+        return byteData.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      try {
+        if (rootElement != null) {
+          // Update the root adapter to remove the content and dispose its
+          // Element tree before releasing the render tree and its BuildOwner.
+          final detachedRoot = RenderObjectToWidgetAdapter<RenderBox>(
+            container: repaintBoundary,
+          ).attachToRenderTree(buildOwner, rootElement);
+          buildOwner.buildScope(detachedRoot);
+          buildOwner.finalizeTree();
+        }
+      } finally {
+        pipelineOwner.rootNode = null;
       }
     }
-
-    final navigatorKey = _navigatorKey;
-    if (navigatorKey == null) {
-      throw StateError(
-        'FlutterHomescreenWidget.init() must be called with a valid NavigatorKey '
-        'before rendering widgets.',
-      );
-    }
-
-    final currentOverlay = navigatorKey.currentState?.overlay;
-    if (currentOverlay != null) {
-      return currentOverlay;
-    }
-
-    await _waitForNextFrame();
-
-    final overlay = navigatorKey.currentState?.overlay;
-    if (overlay == null) {
-      throw StateError(
-        'The NavigatorKey is not attached to an app with an Overlay.',
-      );
-    }
-
-    return overlay;
-  }
-
-  static Future<void> _waitForNextFrame() {
-    final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      completer.complete();
-    });
-    WidgetsBinding.instance.ensureVisualUpdate();
-    return completer.future;
   }
 }
 
-class _RenderingSurface extends StatefulWidget {
-  const _RenderingSurface({required this.child});
+/// Registers the rendering context while it is mounted in the app tree.
+///
+/// The widget itself renders [child] unchanged. Actual captures are built in a
+/// separate render tree owned by [WidgetRenderer].
+class FlutterHomescreenWidgetHost extends StatefulWidget {
+  const FlutterHomescreenWidgetHost({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<_RenderingSurface> createState() => _RenderingSurfaceState();
+  State<FlutterHomescreenWidgetHost> createState() =>
+      _FlutterHomescreenWidgetHostState();
 }
 
-class _RenderingSurfaceState extends State<_RenderingSurface> {
-  final _overlayKey = GlobalKey<OverlayState>();
+class _FlutterHomescreenWidgetHostState
+    extends State<FlutterHomescreenWidgetHost> {
+  Future<void> _renderQueue = Future<void>.value();
+  final _disposed = Completer<void>();
 
   @override
   void initState() {
     super.initState();
-    WidgetRenderer.registerSurface(_overlayKey);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        WidgetRenderer.markSurfaceReady(_overlayKey);
-      }
-    });
+    WidgetRenderer._attach(this);
   }
 
   @override
   void dispose() {
-    WidgetRenderer.unregisterSurface(_overlayKey);
+    WidgetRenderer._detach(this);
+    if (!_disposed.isCompleted) {
+      _disposed.complete();
+    }
     super.dispose();
+  }
+
+  Future<Uint8List> render({
+    required Widget widget,
+    required Size size,
+    required double pixelRatio,
+  }) {
+    if (!mounted) {
+      throw WidgetRenderer.hostNotMountedError();
+    }
+
+    final result = _renderQueue.then<Uint8List>(
+      (_) => _renderOne(widget: widget, size: size, pixelRatio: pixelRatio),
+    );
+
+    // Keep the queue usable after a failed render while preserving the error
+    // on the Future returned to the caller.
+    _renderQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    final disposed = _disposed.future.then<Uint8List>((_) {
+      throw WidgetRenderer.hostNotMountedError();
+    });
+    disposed.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    final completion = Future.any<Uint8List>([result, disposed]);
+    completion.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    return completion;
+  }
+
+  Future<Uint8List> _renderOne({
+    required Widget widget,
+    required Size size,
+    required double pixelRatio,
+  }) async {
+    if (!mounted) {
+      throw WidgetRenderer.hostNotMountedError();
+    }
+
+    final bytes = await WidgetRenderer._renderOffscreen(
+      context: context,
+      widget: widget,
+      size: size,
+      pixelRatio: pixelRatio,
+    );
+
+    if (!mounted) {
+      throw WidgetRenderer.hostNotMountedError();
+    }
+    return bytes;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      alignment: Alignment.topLeft,
-      children: [
-        widget.child,
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: IgnorePointer(child: Overlay(key: _overlayKey)),
-        ),
-      ],
-    );
+    return widget.child;
   }
 }
