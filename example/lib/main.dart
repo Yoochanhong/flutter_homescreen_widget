@@ -13,7 +13,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      builder: FlutterHomescreenWidget.builder,
+      builder: (context, child) {
+        return FlutterHomescreenWidgetHost(child: child!);
+      },
       title: 'flutter_homescreen_widget example',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
@@ -29,13 +31,14 @@ class ClockPage extends StatefulWidget {
   State<ClockPage> createState() => _ClockPageState();
 }
 
-class _ClockPageState extends State<ClockPage> {
+class _ClockPageState extends State<ClockPage> with WidgetsBindingObserver {
   DateTime _now = DateTime.now();
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_updateWidgets());
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       setState(() => _now = DateTime.now());
@@ -45,8 +48,16 @@ class _ClockPageState extends State<ClockPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_updateWidgets());
+    }
   }
 
   Future<void> _updateWidgets() async {
