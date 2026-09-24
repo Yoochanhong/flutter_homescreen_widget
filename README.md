@@ -35,7 +35,9 @@ class MyApp extends StatelessWidget {
  @override
  Widget build(BuildContext context) {
  return MaterialApp(
- builder: FlutterHomescreenWidget.builder,
+ builder: (context, child) {
+   return FlutterHomescreenWidgetHost(child: child!);
+ },
  home: const HomePage(),
  );
  }
@@ -122,7 +124,7 @@ await FlutterHomescreenWidget.reload(widgetName: 'CounterWidget');
 
 ```
 Flutter widget
- │ rendered to PNG via RepaintBoundary (package-owned Overlay)
+ │ rendered to PNG in an independent offscreen render tree
  ▼
 App Group (iOS) / internal storage (Android)
  │ shared between app process and widget process
@@ -132,6 +134,13 @@ WidgetKit / Glance renders the PNG on the home screen
  ▼
 URL scheme deep link → Flutter app receives action ID via onAction stream
 ```
+
+The host supplies the app's mounted context so captures can inherit the
+application's `Theme`, `MediaQuery`, and `Directionality`. The capture tree is
+built and painted synchronously before `toImage()`; it does not depend on the
+app's `Navigator` or `Overlay`. If the content loads images or custom fonts
+asynchronously, make sure those resources are ready before calling `update()`
+(`precacheImage` can be used for images).
 
 ## Limitations
 
