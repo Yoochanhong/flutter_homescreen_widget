@@ -28,26 +28,28 @@ dependencies:
 
 ### Initialize
 
-Register a `NavigatorKey` before `runApp` so the renderer can access the overlay:
+Install the package-owned rendering surface through `MaterialApp.builder`:
 
 ```dart
-final _navKey = GlobalKey<NavigatorState>();
-
-void main() {
- FlutterHomescreenWidget.init(_navKey);
- runApp(MyApp());
-}
-
 class MyApp extends StatelessWidget {
  @override
  Widget build(BuildContext context) {
  return MaterialApp(
- navigatorKey: _navKey,
+ builder: (context, child) {
+   return FlutterHomescreenWidgetHost(child: child!);
+ },
  home: const HomePage(),
  );
  }
 }
 ```
+
+If the application already has a `builder`, compose it with
+`FlutterHomescreenWidget.builder` so the package surface remains inside the
+application context.
+
+Existing applications may temporarily keep
+`FlutterHomescreenWidget.init(navigatorKey)`, but it is deprecated.
 
 ### iOS setup
 
@@ -122,7 +124,7 @@ await FlutterHomescreenWidget.reload(widgetName: 'CounterWidget');
 
 ```
 Flutter widget
- │ rendered to PNG via RepaintBoundary (live Overlay)
+ │ rendered to PNG in an independent offscreen render tree
  ▼
 App Group (iOS) / internal storage (Android)
  │ shared between app process and widget process
@@ -132,6 +134,13 @@ WidgetKit / Glance renders the PNG on the home screen
  ▼
 URL scheme deep link → Flutter app receives action ID via onAction stream
 ```
+
+The host supplies the app's mounted context so captures can inherit the
+application's `Theme`, `MediaQuery`, and `Directionality`. The capture tree is
+built and painted synchronously before `toImage()`; it does not depend on the
+app's `Navigator` or `Overlay`. If the content loads images or custom fonts
+asynchronously, make sure those resources are ready before calling `update()`
+(`precacheImage` can be used for images).
 
 ## Limitations
 

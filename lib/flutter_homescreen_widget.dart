@@ -4,12 +4,12 @@
 /// ## Quick start
 ///
 /// ```dart
-/// final _navKey = GlobalKey<NavigatorState>();
-///
-/// void main() {
-///   FlutterHomescreenWidget.init(_navKey);
-///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
-/// }
+/// MaterialApp(
+///   builder: (context, child) {
+///     return FlutterHomescreenWidgetHost(child: child!);
+///   },
+///   home: const HomePage(),
+/// );
 /// ```
 ///
 /// Then update a widget:
@@ -35,18 +35,35 @@ import 'src/widget_action.dart';
 import 'src/widget_renderer.dart';
 
 export 'src/widget_action.dart';
+export 'src/widget_renderer.dart' show FlutterHomescreenWidgetHost;
 
 /// Entry point for the flutter_homescreen_widget plugin.
 ///
-/// All methods are static. Call [init] once at app startup, then use
-/// [update], [reload], and [onAction] anywhere in your app.
+/// Install [builder] in the application's app widget, then use [update],
+/// [reload], and [onAction] anywhere in your app.
 class FlutterHomescreenWidget {
   FlutterHomescreenWidget._();
 
-  /// Registers the app's [NavigatorState] key.
+  static Future<void> _updateQueue = Future<void>.value();
+
+  /// Installs the package-owned rendering surface inside an app widget.
   ///
-  /// Must be called **before** [runApp] so the widget renderer can access
-  /// the [Overlay] for off-screen rendering.
+  /// ```dart
+  /// MaterialApp(
+  ///   builder: (context, child) {
+  ///     return FlutterHomescreenWidgetHost(child: child!);
+  ///   },
+  ///   home: const HomePage(),
+  /// );
+  /// ```
+  static Widget builder(BuildContext context, Widget? child) {
+    return WidgetRenderer.buildHost(child ?? const SizedBox.shrink());
+  }
+
+  /// Retains source compatibility for legacy applications during migration.
+  ///
+  /// This method no longer installs a rendering surface. Install [builder]
+  /// (or [FlutterHomescreenWidgetHost]) before calling [update].
   ///
   /// ```dart
   /// final _navKey = GlobalKey<NavigatorState>();
@@ -56,6 +73,7 @@ class FlutterHomescreenWidget {
   ///   runApp(MaterialApp(navigatorKey: _navKey, home: MyHome()));
   /// }
   /// ```
+  @Deprecated('Use FlutterHomescreenWidget.builder instead.')
   static void init(GlobalKey<NavigatorState> navigatorKey) {
     WidgetRenderer.init(navigatorKey);
   }
@@ -90,12 +108,38 @@ class FlutterHomescreenWidget {
     required Size size,
     List<WidgetAction> actions = const [],
     double pixelRatio = 3.0,
+  }) {
+    WidgetRenderer.ensureHostMounted();
+
+    final result = _updateQueue.then<void>(
+      (_) => _updateOne(
+        widgetName: widgetName,
+        content: content,
+        size: size,
+        actions: actions,
+        pixelRatio: pixelRatio,
+      ),
+    );
+    _updateQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
+    return result;
+  }
+
+  static Future<void> _updateOne({
+    required String widgetName,
+    required Widget content,
+    required Size size,
+    required List<WidgetAction> actions,
+    required double pixelRatio,
   }) async {
     final bytes = await WidgetRenderer.render(
       widget: content,
       size: size,
       pixelRatio: pixelRatio,
     );
+    WidgetRenderer.ensureHostMounted();
 
     await FlutterHomescreenWidgetPlatform.instance.updateWidget(
       widgetName: widgetName,
